@@ -34,6 +34,7 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('[v0] Login attempt for:', email);
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -41,11 +42,13 @@ export const login = async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
+      console.log('[v0] User not found:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
+      console.log('[v0] Invalid password for:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -55,8 +58,10 @@ export const login = async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    console.log('[v0] Login successful for:', email);
     res.json({ token, user: user.toJSON() });
   } catch (error) {
+    console.error('[v0] Login error:', error);
     res.status(500).json({ error: error.message });
   }
 };
