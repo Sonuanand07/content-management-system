@@ -3,11 +3,52 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
+// Demo user data (fallback)
+const DEMO_USERS: any = {
+  'admin@example.com': { password: 'admin123', role: 'admin', name: 'Admin User' },
+  'editor@example.com': { password: 'editor123', role: 'editor', name: 'Editor User' },
+  'viewer@example.com': { password: 'viewer123', role: 'viewer', name: 'Viewer User' },
+};
+
+// Demo pages data
+const DEMO_PAGES = [
+  {
+    _id: '1',
+    title: 'Welcome Page',
+    slug: 'welcome',
+    blocks: [
+      { id: '1', type: 'heading', content: { level: 1, text: 'Welcome to CMS' } },
+      { id: '2', type: 'paragraph', content: { text: 'This is a demo page showing the content management system.' } },
+    ],
+    status: 'published',
+    createdAt: new Date().toISOString(),
+  },
+];
+
 // Auth Slice
-export const loginAsync = createAsyncThunk('auth/login', async ({ email, password }: { email: string; password: string }) => {
-  const response = await axios.post(`${API_URL}/auth/login`, { email, password });
-  localStorage.setItem('token', response.data.token);
-  return response.data;
+export const loginAsync = createAsyncThunk('auth/login', async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
+  try {
+    const response = await axios.post(`${API_URL}/auth/login`, { email, password }, {
+      timeout: 5000,
+    });
+    localStorage.setItem('token', response.data.token);
+    localStorage.setItem('demo_mode', 'false');
+    return response.data;
+  } catch (error: any) {
+    console.log('[v0] API error, checking demo credentials');
+    // Fallback to demo mode
+    const demoUser = DEMO_USERS[email];
+    if (demoUser && demoUser.password === password) {
+      const token = 'demo_token_' + Date.now();
+      localStorage.setItem('token', token);
+      localStorage.setItem('demo_mode', 'true');
+      return {
+        token,
+        user: { id: email, email, name: demoUser.name, role: demoUser.role },
+      };
+    }
+    return rejectWithValue(error.response?.data?.error || 'Invalid credentials. Try admin@example.com / admin123');
+  }
 });
 
 export const registerAsync = createAsyncThunk(
@@ -78,12 +119,22 @@ const authSlice = createSlice({
 });
 
 // Pages Slice
-export const getPagesAsync = createAsyncThunk('pages/getPages', async (_, { getState }: any) => {
-  const token = localStorage.getItem('token');
-  const response = await axios.get(`${API_URL}/pages`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return response.data;
+export const getPagesAsync = createAsyncThunk('pages/getPages', async (_, { rejectWithValue }: any) => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(`${API_URL}/pages`, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 5000,
+    });
+    return response.data;
+  } catch (error: any) {
+    console.log('[v0] Using demo pages');
+    // Fallback to demo data
+    if (localStorage.getItem('demo_mode') === 'true') {
+      return { pages: DEMO_PAGES, total: DEMO_PAGES.length };
+    }
+    return rejectWithValue('Failed to load pages');
+  }
 });
 
 export const getPageByIdAsync = createAsyncThunk('pages/getPageById', async (id: string) => {
